@@ -1,11 +1,14 @@
 # Usa uma imagem base com Python
 FROM python:3.10
 
+# Instala ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg
+
 # Define o diretório de trabalho
 WORKDIR /app
 
 # Copia os arquivos do projeto
-COPY . .
+COPY . /app
 
 # Instala as dependências
 RUN pip install -r requirements.txt
@@ -14,6 +17,3 @@ RUN pip install -r requirements.txt
 CMD ["python", "main.py"]
 
 EXPOSE 8080
-CMD ["python", "main.py"]
-
-RUN apt-get update && apt-get install -y ffmpeg
