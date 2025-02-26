@@ -28,7 +28,7 @@ if not DISCORD_TOKEN:
 
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
-    base_url="https://api.deepseek.com/beta"
+    base_url="https://api.deepseek.com"
 )
 
 # Configuração do bot do Discord
@@ -50,7 +50,7 @@ def perguntar_ao_deepseek(pergunta):
         resposta = client.chat.completions.create(
             model="deepseek-chat",
             messages=messages,
-            max_tokens=100
+            stream=False
         )
         resposta_ia = resposta.choices[0].message.content
         messages.append({"role": "assistant", "content": resposta_ia})
