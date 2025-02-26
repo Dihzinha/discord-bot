@@ -29,7 +29,7 @@ if not DISCORD_TOKEN:
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.AutoShardedBot(command_prefix="!", intents=intents)
 
 # Lista para armazenar o histórico da conversa
 messages = [
@@ -56,12 +56,14 @@ def perguntar_ao_deepseek(pergunta):
 async def tocar_audio(ctx, audio_buffer):
     if ctx.author.voice and ctx.author.voice.channel:
         canal = ctx.author.voice.channel
-
         voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+
+        # Verifica se o bot já está conectado
         if not voice_client or not voice_client.is_connected():
             voice_client = await canal.connect()
             await asyncio.sleep(1)
         
+        # Se já estiver tocando, para o áudio anterior
         if voice_client.is_playing():
             voice_client.stop()
 
@@ -69,7 +71,6 @@ async def tocar_audio(ctx, audio_buffer):
         with open(temp_audio_file, "wb") as f:
             f.write(audio_buffer.getvalue())
 
-        ffmpeg_path = "ffmpeg"
         ffmpeg_options = "-af atempo=1.2"
         source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
 
@@ -101,10 +102,11 @@ async def perguntar(ctx, *, pergunta: str):
 
     await tocar_audio(ctx, audio_buffer)
 
+# Evita que o bot seja inicializado mais de uma vez no Cloud Run
 if __name__ == "__main__":
     from threading import Thread
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), threaded=True)).start()
-    try:
-        bot.run(DISCORD_TOKEN)
-    except discord.errors.LoginFailure:
-        print("Erro: Token do Discord inválido. Verifique a configuração.")
+    
+    loop = asyncio.get_event_loop()
+    loop.create_task(bot.start(DISCORD_TOKEN))
+    loop.run_forever()
