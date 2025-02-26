@@ -1,0 +1,13 @@
+discord.py
+discord.py[voice]
+openai
+pyttsx3
+pynacl
+gtts
+ffmpeg==1.4
+opuslib==3.0.1
+pydub
+flask
+flask-cors
+pyngrok
+requests
