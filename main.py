@@ -7,6 +7,7 @@ import asyncio
 import requests
 from flask import Flask
 import shutil
+import time
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
@@ -75,6 +76,9 @@ async def tocar_audio(ctx, audio_buffer):
         temp_audio_file = "resposta.mp3"
         with open(temp_audio_file, "wb") as f:
             f.write(audio_buffer.getvalue())
+        
+        # Espera um pouco para garantir que o arquivo foi salvo
+        time.sleep(1)
 
         # Verifica se o ffmpeg está instalado
         ffmpeg_path = shutil.which("ffmpeg")
@@ -82,7 +86,7 @@ async def tocar_audio(ctx, audio_buffer):
             await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
             return
         
-        ffmpeg_options = "-af atempo=1.2"
+        ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
         source = discord.FFmpegPCMAudio(temp_audio_file, executable=ffmpeg_path, options=ffmpeg_options)
 
         voice_client.play(source)
