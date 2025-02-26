@@ -6,6 +6,7 @@ from io import BytesIO
 import asyncio
 import requests
 from flask import Flask
+import shutil
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
@@ -25,11 +26,17 @@ if not DEEPSEEK_API_KEY:
 if not DISCORD_TOKEN:
     raise ValueError("Erro: O token do Discord não está configurado corretamente.")
 
+# Impede múltiplas instâncias do bot
+if os.getenv("RUNNING_INSTANCE"):
+    print("Uma instância do bot já está rodando. Encerrando esta nova execução...")
+    exit()
+os.environ["RUNNING_INSTANCE"] = "1"
+
 # Configuração do bot do Discord
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
-bot = commands.AutoShardedBot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Lista para armazenar o histórico da conversa
 messages = [
@@ -56,14 +63,12 @@ def perguntar_ao_deepseek(pergunta):
 async def tocar_audio(ctx, audio_buffer):
     if ctx.author.voice and ctx.author.voice.channel:
         canal = ctx.author.voice.channel
-        voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
-        # Verifica se o bot já está conectado
+        voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
         if not voice_client or not voice_client.is_connected():
             voice_client = await canal.connect()
             await asyncio.sleep(1)
         
-        # Se já estiver tocando, para o áudio anterior
         if voice_client.is_playing():
             voice_client.stop()
 
@@ -71,8 +76,14 @@ async def tocar_audio(ctx, audio_buffer):
         with open(temp_audio_file, "wb") as f:
             f.write(audio_buffer.getvalue())
 
+        # Verifica se o ffmpeg está instalado
+        ffmpeg_path = shutil.which("ffmpeg")
+        if not ffmpeg_path:
+            await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
+            return
+        
         ffmpeg_options = "-af atempo=1.2"
-        source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
+        source = discord.FFmpegPCMAudio(temp_audio_file, executable=ffmpeg_path, options=ffmpeg_options)
 
         voice_client.play(source)
 
@@ -102,11 +113,10 @@ async def perguntar(ctx, *, pergunta: str):
 
     await tocar_audio(ctx, audio_buffer)
 
-# Evita que o bot seja inicializado mais de uma vez no Cloud Run
 if __name__ == "__main__":
     from threading import Thread
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), threaded=True)).start()
-    
-    loop = asyncio.get_event_loop()
-    loop.create_task(bot.start(DISCORD_TOKEN))
-    loop.run_forever()
+    try:
+        bot.run(DISCORD_TOKEN)
+    except discord.errors.LoginFailure:
+        print("Erro: Token do Discord inválido. Verifique a configuração.")
