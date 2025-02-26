@@ -18,6 +18,13 @@ def home():
 # Configurações iniciais
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
+if not DEEPSEEK_API_KEY:
+    raise ValueError("Erro: A chave da API do DeepSeek não está configurada corretamente.")
+
+if not DISCORD_TOKEN:
+    raise ValueError("Erro: O token do Discord não está configurado corretamente.")
 
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
@@ -100,8 +107,6 @@ async def perguntar(ctx, *, pergunta: str):
     await asyncio.sleep(600)
     await ctx.send("⏳ Nenhuma interação detectada, desligando...")
     os._exit(0)  # Encerra o processo
-
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 if __name__ == "__main__":
     from threading import Thread
