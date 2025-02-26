@@ -5,20 +5,20 @@ from openai import OpenAI
 from gtts import gTTS
 from io import BytesIO
 import asyncio
-from flask import Flask, request
-from flask_cors import CORS
-import threading
 import requests
 
 # Configurações iniciais
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+REPLIT_API_URL = os.getenv("REPLIT_API_URL")  # URL da API de Deployments do Replit
+REPLIT_API_KEY = os.getenv("REPLIT_API_KEY")  # Chave da API do Replit
+
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com/beta"
 )
 
-# Configurações do bot do Discord
+# Configuração do bot do Discord
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
@@ -26,7 +26,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Lista para armazenar o histórico da conversa
 messages = [
-    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth , e não é so ela que fala com você, outras pessoas tambem podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que esta em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens muito longas e virgulas. Começe sempre suas respostas com um 'bip-bop'"}
+    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth..."}
 ]
 
 def perguntar_ao_deepseek(pergunta):
@@ -59,14 +59,9 @@ async def tocar_audio(ctx, audio_buffer):
         with open(temp_audio_file, "wb") as f:
             f.write(audio_buffer.getvalue())
 
-        print(f"Áudio gerado: {temp_audio_file}")
-
-        await asyncio.sleep(0.5)  # Redução ainda maior do atraso para tocar mais rápido
-
         ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"  # Voz mais rápida e robótica
         source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
 
-        print(f"Tentando tocar áudio em: {temp_audio_file}")
         voice_client.play(source)
 
         while voice_client.is_playing():
@@ -75,7 +70,7 @@ async def tocar_audio(ctx, audio_buffer):
         await voice_client.disconnect()
         os.remove(temp_audio_file)
     else:
-        await ctx.send("Você precisa estar em um canal de voz para eu falar! Onde mais eu poderia transmitir minha gloriosa sabedoria robótica?")
+        await ctx.send("Você precisa estar em um canal de voz para eu falar!")
 
 @bot.event
 async def on_ready():
@@ -85,6 +80,20 @@ async def on_ready():
 
 @bot.command(aliases=["p"])
 async def perguntar(ctx, *, pergunta: str):
+    # Ativar o Replit via API antes de responder
+    if REPLIT_API_URL and REPLIT_API_KEY:
+        try:
+            headers = {"Authorization": f"Bearer {REPLIT_API_KEY}"}
+            response = requests.post(REPLIT_API_URL, headers=headers)
+            if response.status_code == 200:
+                await ctx.send("🚀 Ativando o Replit, aguarde...")
+                await asyncio.sleep(10)  # Tempo para garantir que o Replit inicie
+            else:
+                await ctx.send("⚠️ Falha ao ativar o Replit!")
+        except Exception as e:
+            await ctx.send("⚠️ Erro ao tentar ativar o Replit!")
+            print(e)
+    
     resposta = perguntar_ao_deepseek(pergunta)
     await ctx.send(f"**Pergunta:** {pergunta}\n**Resposta:** {resposta}")
 
@@ -95,20 +104,10 @@ async def perguntar(ctx, *, pergunta: str):
 
     await tocar_audio(ctx, audio_buffer)
 
-# Servidor Flask para manter o bot online
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/', methods=['GET', 'HEAD'])
-def home():
-    if DISCORD_WEBHOOK_URL:
-        requests.post(DISCORD_WEBHOOK_URL, json={"content": "🔍 O UptimeRobot verificou o bot e ele está ativo."})
-    return "Bot online!", 200
-
-def run_flask():
-    app.run(host="0.0.0.0", port=8080, debug=False, use_reloader=False)
-
-threading.Thread(target=run_flask, daemon=True).start()
+    # Manter o bot ativo por 10 minutos antes de desligar
+    await asyncio.sleep(600)
+    await ctx.send("⏳ Nenhuma interação detectada, desligando...")
+    os._exit(0)  # Encerra o processo
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(DISCORD_TOKEN)
