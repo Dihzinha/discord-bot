@@ -33,7 +33,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Lista para armazenar o histórico da conversa
 messages = [
-    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth , e não é so ela que fala com você, outras pessoas tambem podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que esta em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e virgulas. Começe sempre suas respostas com um 'bip-bop', de respostas pequenas"}
+    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth, e não é só ela que fala com você, outras pessoas também podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que está em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e vírgulas. Comece sempre suas respostas com um 'bip-bop', dê respostas pequenas."}
 ]
 
 def perguntar_ao_deepseek(pergunta):
@@ -58,19 +58,18 @@ async def tocar_audio(ctx, audio_buffer):
         canal = ctx.author.voice.channel
 
         voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
-        if not voice_client:
+        if not voice_client or not voice_client.is_connected():
             voice_client = await canal.connect()
             await asyncio.sleep(1)
+        
+        if voice_client.is_playing():
+            voice_client.stop()
 
         temp_audio_file = "resposta.mp3"
         with open(temp_audio_file, "wb") as f:
             f.write(audio_buffer.getvalue())
 
         ffmpeg_path = "ffmpeg"
-        if not os.path.exists(ffmpeg_path):
-            await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
-            return
-
         ffmpeg_options = "-af atempo=1.2"
         source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
 
