@@ -1,5 +1,4 @@
 import os
-import threading
 import discord
 from discord.ext import commands
 from openai import OpenAI
@@ -9,11 +8,16 @@ import asyncio
 import requests
 from flask import Flask
 
+# Inicializa um servidor Flask para Cloud Run
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot rodando!"
+
 # Configurações iniciais
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-REPLIT_API_URL = os.getenv("REPLIT_API_URL")  # URL da API de Deployments do Replit
-REPLIT_API_KEY = os.getenv("REPLIT_API_KEY")  # Chave da API do Replit
 
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
@@ -78,24 +82,10 @@ async def tocar_audio(ctx, audio_buffer):
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
     if DISCORD_WEBHOOK_URL:
-        requests.post(DISCORD_WEBHOOK_URL, json={"content": "\ud83d\ude80 O bot está online e funcionando!"})
+        requests.post(DISCORD_WEBHOOK_URL, json={"content": "🚀 O bot está online e funcionando!"})
 
 @bot.command(aliases=["p"])
 async def perguntar(ctx, *, pergunta: str):
-    # Ativar o Replit via API antes de responder
-    if REPLIT_API_URL and REPLIT_API_KEY:
-        try:
-            headers = {"Authorization": f"Bearer {REPLIT_API_KEY}"}
-            response = requests.post(REPLIT_API_URL, headers=headers)
-            if response.status_code == 200:
-                await ctx.send("\ud83d\ude80 Ativando o Replit, aguarde...")
-                await asyncio.sleep(10)  # Tempo para garantir que o Replit inicie
-            else:
-                await ctx.send("\u26a0\ufe0f Falha ao ativar o Replit!")
-        except Exception as e:
-            await ctx.send("\u26a0\ufe0f Erro ao tentar ativar o Replit!")
-            print(e)
-    
     resposta = perguntar_ao_deepseek(pergunta)
     await ctx.send(f"**Pergunta:** {pergunta}\n**Resposta:** {resposta}")
 
@@ -108,20 +98,12 @@ async def perguntar(ctx, *, pergunta: str):
 
     # Manter o bot ativo por 10 minutos antes de desligar
     await asyncio.sleep(600)
-    await ctx.send("\u23f3 Nenhuma interação detectada, desligando...")
+    await ctx.send("⏳ Nenhuma interação detectada, desligando...")
     os._exit(0)  # Encerra o processo
 
-# Cria um servidor Flask para manter o Cloud Run ativo
-app = Flask(__name__)
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-@app.route("/")
-def home():
-    return "Bot do Discord está rodando no Google Cloud Run!"
-
-def run_discord_bot():
-    bot.run(os.getenv("DISCORD_TOKEN"))
-
-# Inicia o bot e o servidor Flask simultaneamente
 if __name__ == "__main__":
-    threading.Thread(target=run_discord_bot, daemon=True).start()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    from threading import Thread
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))).start()
+    bot.run(DISCORD_TOKEN)
