@@ -105,5 +105,5 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 if __name__ == "__main__":
     from threading import Thread
-    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))).start()
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), threaded=True)).start()
     bot.run(DISCORD_TOKEN)
