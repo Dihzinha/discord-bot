@@ -37,6 +37,7 @@ intents.message_content = True
 intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Lista para armazenar o histórico da conversa
 messages = [
     {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth , e não é so ela que fala com você, outras pessoas tambem podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que esta em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e virgulas. Começe sempre suas respostas com um 'bip-bop', de respostas pequenas"}
 ]
@@ -55,10 +56,10 @@ def perguntar_ao_deepseek(pergunta):
         messages.append({"role": "assistant", "content": resposta_ia})
         return resposta_ia
     except Exception as e:
-        print(f"Erro ao chamar DeepSeek: {e}")
-        return "Erro ao se conectar com DeepSeek!"
+        print(f"Erro: {e}")
+        return "Droga, parece que o sistema tomou um choque de alta voltagem. Tenta de novo!"
 
-async def tocar_audio(ctx, resposta):
+async def tocar_audio(ctx, audio_buffer):
     if ctx.author.voice and ctx.author.voice.channel:
         canal = ctx.author.voice.channel
 
@@ -67,31 +68,20 @@ async def tocar_audio(ctx, resposta):
             voice_client = await canal.connect()
             await asyncio.sleep(1)
 
-        try:
-            tts = gTTS(text=resposta, lang='pt-br', slow=False)
-            audio_buffer = BytesIO()
-            tts.write_to_fp(audio_buffer)
-            audio_buffer.seek(0)
+        temp_audio_file = "resposta.mp3"
+        with open(temp_audio_file, "wb") as f:
+            f.write(audio_buffer.getvalue())
 
-            temp_audio_file = "resposta.mp3"
-            with open(temp_audio_file, "wb") as f:
-                f.write(audio_buffer.getvalue())
+        ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"  # Voz mais rápida e robótica
+        source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
 
-            ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
-            source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
+        voice_client.play(source)
 
-            voice_client.play(source)
-            while voice_client.is_playing():
-                await asyncio.sleep(1)
+        while voice_client.is_playing():
+            await asyncio.sleep(1)
 
-        except Exception as e:
-            print(f"Erro ao reproduzir áudio: {e}")
-            await ctx.send("Falha ao gerar áudio!")
-
-        finally:
-            await voice_client.disconnect()
-            if os.path.exists(temp_audio_file):
-                os.remove(temp_audio_file)
+        await voice_client.disconnect()
+        os.remove(temp_audio_file)
     else:
         await ctx.send("Você precisa estar em um canal de voz para eu falar!")
 
@@ -105,7 +95,13 @@ async def on_ready():
 async def perguntar(ctx, *, pergunta: str):
     resposta = perguntar_ao_deepseek(pergunta)
     await ctx.send(f"**Pergunta:** {pergunta}\n**Resposta:** {resposta}")
-    await tocar_audio(ctx, resposta)
+
+    tts = gTTS(text=resposta, lang='pt-br', slow=False)
+    audio_buffer = BytesIO()
+    tts.write_to_fp(audio_buffer)
+    audio_buffer.seek(0)
+
+    await tocar_audio(ctx, audio_buffer)
 
 if __name__ == "__main__":
     from threading import Thread
