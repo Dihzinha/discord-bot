@@ -71,7 +71,7 @@ async def tocar_audio(ctx, audio_buffer):
             await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
             return
 
-        ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
+        ffmpeg_options = "-af atempo=1.2"
         source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
 
         voice_client.play(source)
