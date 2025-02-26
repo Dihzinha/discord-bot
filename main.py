@@ -7,6 +7,7 @@ from io import BytesIO
 import asyncio
 import requests
 from flask import Flask
+import ssl
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
@@ -26,6 +27,7 @@ if not DEEPSEEK_API_KEY:
 if not DISCORD_TOKEN:
     raise ValueError("Erro: O token do Discord não está configurado corretamente.")
 
+# Inicializando o cliente da DeepSeek API corretamente
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com"
@@ -39,7 +41,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Lista para armazenar o histórico da conversa
 messages = [
-    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth..."}
+    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth , e não é so ela que fala com você, outras pessoas tambem podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que esta em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e virgulas. Começe sempre suas respostas com um 'bip-bop', de respostas pequenas"}
 ]
 
 def perguntar_ao_deepseek(pergunta):
@@ -56,7 +58,7 @@ def perguntar_ao_deepseek(pergunta):
         messages.append({"role": "assistant", "content": resposta_ia})
         return resposta_ia
     except Exception as e:
-        print(f"Erro: {e}")
+        print(f"Erro ao se conectar com DeepSeek: {e}")
         return "Droga, parece que o sistema tomou um choque de alta voltagem. Tenta de novo!"
 
 async def tocar_audio(ctx, audio_buffer):
@@ -72,7 +74,7 @@ async def tocar_audio(ctx, audio_buffer):
         with open(temp_audio_file, "wb") as f:
             f.write(audio_buffer.getvalue())
 
-        ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"  # Voz mais rápida e robótica
+        ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
         source = discord.FFmpegPCMAudio(temp_audio_file, options=ffmpeg_options)
 
         voice_client.play(source)
@@ -89,7 +91,10 @@ async def tocar_audio(ctx, audio_buffer):
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
     if DISCORD_WEBHOOK_URL:
-        requests.post(DISCORD_WEBHOOK_URL, json={"content": "🚀 O bot está online e funcionando!"})
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json={"content": "🚀 O bot está online e funcionando!"}, verify=False)
+        except Exception as e:
+            print(f"Erro ao enviar mensagem de webhook: {e}")
 
 @bot.command(aliases=["p"])
 async def perguntar(ctx, *, pergunta: str):
@@ -103,10 +108,9 @@ async def perguntar(ctx, *, pergunta: str):
 
     await tocar_audio(ctx, audio_buffer)
 
-    # Manter o bot ativo por 10 minutos antes de desligar
     await asyncio.sleep(600)
     await ctx.send("⏳ Nenhuma interação detectada, desligando...")
-    os._exit(0)  # Encerra o processo
+    os._exit(0)
 
 if __name__ == "__main__":
     from threading import Thread
