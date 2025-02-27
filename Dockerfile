@@ -10,6 +10,9 @@ COPY . /app
 # Instala as dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Instala o ffmpeg para reprodução de audio
+RUN apt-get update && apt-get install -y ffmpeg
+
 # Define as variáveis de ambiente
 ENV PYTHONUNBUFFERED=1
 
