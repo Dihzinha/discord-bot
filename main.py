@@ -4,11 +4,10 @@ from discord.ext import commands
 from gtts import gTTS
 from io import BytesIO
 import asyncio
-import aiohttp
+import requests
 from flask import Flask
 import shutil
 import time
-import requests
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
@@ -42,11 +41,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Lista para armazenar o histórico da conversa
 messages = [
-    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth, e não é só ela que fala com você, outras pessoas também podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que está em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e vírgulas. Comece sempre suas respostas com um 'bip-bop', dê respostas pequenas."}
+    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth..."}
 ]
 
-# Função assíncrona para fazer a chamada à API DeepSeek
-async def perguntar_ao_deepseek(pergunta):
+def perguntar_ao_deepseek(pergunta):
     global messages
     messages.append({"role": "user", "content": pergunta})
 
@@ -54,12 +52,11 @@ async def perguntar_ao_deepseek(pergunta):
     payload = {"model": "deepseek-chat", "messages": messages}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post("https://api.deepseek.com/v1/chat/completions", json=payload, headers=headers) as response:
-                response.raise_for_status()
-                resposta_ia = (await response.json())["choices"][0]["message"]["content"]
-                messages.append({"role": "assistant", "content": resposta_ia})
-                return resposta_ia
+        response = requests.post("https://api.deepseek.com/v1/chat/completions", json=payload, headers=headers)
+        response.raise_for_status()
+        resposta_ia = response.json()["choices"][0]["message"]["content"]
+        messages.append({"role": "assistant", "content": resposta_ia})
+        return resposta_ia
     except Exception as e:
         print(f"Erro: {e}")
         return "Droga, parece que o sistema tomou um choque de alta voltagem. Tenta de novo!"
@@ -70,27 +67,19 @@ async def tocar_audio(ctx, audio_buffer):
 
         voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
         if not voice_client or not voice_client.is_connected():
-            voice_client = await canal.connect()
-            await asyncio.sleep(1)
-        
+            voice_client = await canal.connect(timeout=15)  # Aumentado o tempo de timeout
+
         if voice_client.is_playing():
             voice_client.stop()
 
-        temp_audio_file = "resposta.mp3"
-        with open(temp_audio_file, "wb") as f:
-            f.write(audio_buffer.getvalue())
-        
-        # Espera um pouco para garantir que o arquivo foi salvo
-        time.sleep(1)
-
-        # Verifica se o ffmpeg está instalado
+        # Tocar diretamente o áudio sem salvar
         ffmpeg_path = shutil.which("ffmpeg")
         if not ffmpeg_path:
             await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
             return
         
         ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
-        source = discord.FFmpegPCMAudio(temp_audio_file, executable=ffmpeg_path, options=ffmpeg_options)
+        source = discord.FFmpegPCMAudio(audio_buffer, executable=ffmpeg_path, options=ffmpeg_options)
 
         voice_client.play(source)
 
@@ -98,7 +87,6 @@ async def tocar_audio(ctx, audio_buffer):
             await asyncio.sleep(1)
 
         await voice_client.disconnect()
-        os.remove(temp_audio_file)
     else:
         await ctx.send("Você precisa estar em um canal de voz para eu falar!")
 
@@ -110,7 +98,7 @@ async def on_ready():
 
 @bot.command(aliases=["p"])
 async def perguntar(ctx, *, pergunta: str):
-    resposta = await perguntar_ao_deepseek(pergunta)
+    resposta = perguntar_ao_deepseek(pergunta)
     await ctx.send(f"**Pergunta:** {pergunta}\n**Resposta:** {resposta}")
 
     tts = gTTS(text=resposta, lang='pt-br', slow=False)
