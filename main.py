@@ -4,7 +4,7 @@ from discord.ext import commands
 from gtts import gTTS
 from io import BytesIO
 import asyncio
-import requests
+import aiohttp
 from flask import Flask
 import shutil
 import time
@@ -44,8 +44,8 @@ messages = [
     {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth, e não é só ela que fala com você, outras pessoas também podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que está em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e vírgulas. Comece sempre suas respostas com um 'bip-bop', dê respostas pequenas."}
 ]
 
-# Definição da função perguntar_ao_deepseek
-def perguntar_ao_deepseek(pergunta):
+# Função assíncrona para fazer a chamada à API DeepSeek
+async def perguntar_ao_deepseek(pergunta):
     global messages
     messages.append({"role": "user", "content": pergunta})
 
@@ -53,11 +53,12 @@ def perguntar_ao_deepseek(pergunta):
     payload = {"model": "deepseek-chat", "messages": messages}
 
     try:
-        response = requests.post("https://api.deepseek.com/v1/chat/completions", json=payload, headers=headers)
-        response.raise_for_status()
-        resposta_ia = response.json()["choices"][0]["message"]["content"]
-        messages.append({"role": "assistant", "content": resposta_ia})
-        return resposta_ia
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://api.deepseek.com/v1/chat/completions", json=payload, headers=headers) as response:
+                response.raise_for_status()
+                resposta_ia = (await response.json())["choices"][0]["message"]["content"]
+                messages.append({"role": "assistant", "content": resposta_ia})
+                return resposta_ia
     except Exception as e:
         print(f"Erro: {e}")
         return "Droga, parece que o sistema tomou um choque de alta voltagem. Tenta de novo!"
@@ -108,7 +109,7 @@ async def on_ready():
 
 @bot.command(aliases=["p"])
 async def perguntar(ctx, *, pergunta: str):
-    resposta = perguntar_ao_deepseek(pergunta)
+    resposta = await perguntar_ao_deepseek(pergunta)
     await ctx.send(f"**Pergunta:** {pergunta}\n**Resposta:** {resposta}")
 
     tts = gTTS(text=resposta, lang='pt-br', slow=False)
