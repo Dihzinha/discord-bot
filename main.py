@@ -8,7 +8,6 @@ import requests
 from flask import Flask
 import shutil
 import time
-import tempfile
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
@@ -68,24 +67,19 @@ async def tocar_audio(ctx, audio_buffer):
 
         voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
         if not voice_client or not voice_client.is_connected():
-            voice_client = await canal.connect(timeout=15)
+            voice_client = await canal.connect(timeout=15)  # Aumentado o tempo de timeout
 
         if voice_client.is_playing():
             voice_client.stop()
 
-        # Criar um arquivo temporário para o áudio
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            tmp_file.write(audio_buffer.read())
-            tmp_file_path = tmp_file.name
-
-        # Tocar o áudio
+        # Tocar diretamente o áudio sem salvar
         ffmpeg_path = shutil.which("ffmpeg")
         if not ffmpeg_path:
             await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
             return
         
         ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
-        source = discord.FFmpegPCMAudio(tmp_file_path, executable=ffmpeg_path, options=ffmpeg_options)
+        source = discord.FFmpegPCMAudio(audio_buffer, executable=ffmpeg_path, options=ffmpeg_options)
 
         voice_client.play(source)
 
@@ -93,9 +87,6 @@ async def tocar_audio(ctx, audio_buffer):
             await asyncio.sleep(1)
 
         await voice_client.disconnect()
-
-        # Remover o arquivo temporário após o uso
-        os.remove(tmp_file_path)
     else:
         await ctx.send("Você precisa estar em um canal de voz para eu falar!")
 
