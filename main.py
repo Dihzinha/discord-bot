@@ -7,7 +7,6 @@ import asyncio
 import requests
 from flask import Flask
 import shutil
-import time
 import tempfile
 
 # Inicializa um servidor Flask para Cloud Run
@@ -73,25 +72,26 @@ async def tocar_audio(ctx, audio_buffer):
         if voice_client.is_playing():
             voice_client.stop()
 
-        # Salvar o áudio em um arquivo temporário
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            temp_file.write(audio_buffer.read())
-            temp_file_path = temp_file.name
-
+        # Salvar o áudio gerado em um arquivo temporário
         ffmpeg_path = shutil.which("ffmpeg")
         if not ffmpeg_path:
             await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
             return
         
-        ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
-        source = discord.FFmpegPCMAudio(temp_file_path, executable=ffmpeg_path, options=ffmpeg_options)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
+            tts = gTTS(text=audio_buffer, lang='pt-br', slow=False)
+            tts.save(temp_file.name)
 
-        voice_client.play(source)
+            ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
+            source = discord.FFmpegPCMAudio(temp_file.name, executable=ffmpeg_path, options=ffmpeg_options)
 
-        while voice_client.is_playing():
-            await asyncio.sleep(1)
+            voice_client.play(source)
 
-        await voice_client.disconnect()
+            while voice_client.is_playing():
+                await asyncio.sleep(1)
+
+            await voice_client.disconnect()
+            os.remove(temp_file.name)  # Remover o arquivo temporário após o uso
     else:
         await ctx.send("Você precisa estar em um canal de voz para eu falar!")
 
@@ -106,12 +106,7 @@ async def perguntar(ctx, *, pergunta: str):
     resposta = perguntar_ao_deepseek(pergunta)
     await ctx.send(f"**Pergunta:** {pergunta}\n**Resposta:** {resposta}")
 
-    tts = gTTS(text=resposta, lang='pt-br', slow=False)
-    audio_buffer = BytesIO()
-    tts.write_to_fp(audio_buffer)
-    audio_buffer.seek(0)
-
-    await tocar_audio(ctx, audio_buffer)
+    await tocar_audio(ctx, resposta)
 
 if __name__ == "__main__":
     from threading import Thread
