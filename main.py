@@ -8,7 +8,6 @@ import requests
 from flask import Flask
 import shutil
 import time
-import tempfile
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
@@ -66,33 +65,36 @@ async def tocar_audio(ctx, audio_buffer):
     if ctx.author.voice and ctx.author.voice.channel:
         canal = ctx.author.voice.channel
 
+        # Verifica se o bot já está no canal de voz
         voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
-        if not voice_client or not voice_client.is_connected():
-            voice_client = await canal.connect(timeout=15)  # Aumentado o tempo de timeout
+        if voice_client and voice_client.channel == canal:
+            print("Bot já está no canal de voz.")
+        else:
+            # Se não estiver, conecta
+            voice_client = await canal.connect()
 
         if voice_client.is_playing():
             voice_client.stop()
 
-        # Salvar o áudio gerado em um arquivo temporário no formato WAV
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
-            tts = gTTS(text=audio_buffer, lang='pt-br', slow=False)
-            tts.save(temp_file.name)
+        # Salvar o áudio em um arquivo temporário
+        temp_audio_path = "/tmp/audio.wav"
+        with open(temp_audio_path, "wb") as f:
+            f.write(audio_buffer.read())
 
-            ffmpeg_path = shutil.which("ffmpeg")
-            if not ffmpeg_path:
-                await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
-                return
+        ffmpeg_path = shutil.which("ffmpeg")
+        if not ffmpeg_path:
+            await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
+            return
+        
+        ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
+        source = discord.FFmpegPCMAudio(temp_audio_path, executable=ffmpeg_path, options=ffmpeg_options)
 
-            ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
-            source = discord.FFmpegPCMAudio(temp_file.name, executable=ffmpeg_path, options=ffmpeg_options)
+        voice_client.play(source)
 
-            voice_client.play(source)
+        while voice_client.is_playing():
+            await asyncio.sleep(1)
 
-            while voice_client.is_playing():
-                await asyncio.sleep(1)
-
-            await voice_client.disconnect()
-            os.remove(temp_file.name)  # Remover o arquivo temporário após o uso
+        await voice_client.disconnect()
     else:
         await ctx.send("Você precisa estar em um canal de voz para eu falar!")
 
