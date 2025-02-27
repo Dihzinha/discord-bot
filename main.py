@@ -8,6 +8,7 @@ import aiohttp
 from flask import Flask
 import shutil
 import time
+import requests
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
