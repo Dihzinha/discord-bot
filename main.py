@@ -5,15 +5,28 @@ from gtts import gTTS
 from io import BytesIO
 import asyncio
 import requests
+from flask import Flask
 import shutil
+import time
+import tempfile
+
+# Inicializa um servidor Flask para Cloud Run
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot rodando!"
 
 # Configurações iniciais
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-if not DEEPSEEK_API_KEY or not DISCORD_TOKEN:
-    raise ValueError("Erro: A chave da API do DeepSeek ou o token do Discord não estão configurados corretamente.")
+if not DEEPSEEK_API_KEY:
+    raise ValueError("Erro: A chave da API do DeepSeek não está configurada corretamente.")
+
+if not DISCORD_TOKEN:
+    raise ValueError("Erro: O token do Discord não está configurado corretamente.")
 
 # Impede múltiplas instâncias do bot
 if os.getenv("RUNNING_INSTANCE"):
@@ -28,9 +41,10 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Lista para armazenar o histórico da conversa
-messages = [{"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth , e não é so ela que fala com você, outras pessoas tambem podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que esta em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e virgulas. Começe sempre suas respostas com um 'bip-bop', de respostas pequenas"}]
+messages = [
+    {"role": "system", "content": "Você é uma IA ajudante em um RPG de cyberpunk de uma garota chamada Elizabeth , e não é so ela que fala com você, outras pessoas tambem podem se comunicar com você. Fale de forma sarcástica e acelerada, em alguns momentos fazendo referências ao mundo cyberpunk. Seja exagerado e dramático às vezes. Evite usar emojis. Evite mencionar que esta em um mundo cyberpunk e tente agir como se realmente vivesse naquele mundo. Evite mensagens longas e virgulas. Começe sempre suas respostas com um 'bip-bop', de respostas pequenas"}
+]
 
-# Função para conversar com o DeepSeek
 def perguntar_ao_deepseek(pergunta):
     global messages
     messages.append({"role": "user", "content": pergunta})
@@ -48,42 +62,49 @@ def perguntar_ao_deepseek(pergunta):
         print(f"Erro: {e}")
         return "Droga, parece que o sistema tomou um choque de alta voltagem. Tenta de novo!"
 
-# Função para tocar o áudio no canal de voz
 async def tocar_audio(ctx, audio_buffer):
     if ctx.author.voice and ctx.author.voice.channel:
         canal = ctx.author.voice.channel
-        voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
+        voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
         if not voice_client or not voice_client.is_connected():
             voice_client = await canal.connect(timeout=15)
 
         if voice_client.is_playing():
             voice_client.stop()
 
+        # Criar um arquivo temporário para o áudio
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            tmp_file.write(audio_buffer.read())
+            tmp_file_path = tmp_file.name
+
+        # Tocar o áudio
         ffmpeg_path = shutil.which("ffmpeg")
         if not ffmpeg_path:
             await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
             return
-
+        
         ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
-        source = discord.FFmpegPCMAudio(audio_buffer, executable=ffmpeg_path, options=ffmpeg_options)
+        source = discord.FFmpegPCMAudio(tmp_file_path, executable=ffmpeg_path, options=ffmpeg_options)
+
         voice_client.play(source)
 
         while voice_client.is_playing():
             await asyncio.sleep(1)
 
         await voice_client.disconnect()
+
+        # Remover o arquivo temporário após o uso
+        os.remove(tmp_file_path)
     else:
         await ctx.send("Você precisa estar em um canal de voz para eu falar!")
 
-# Evento de inicialização
 @bot.event
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
     if DISCORD_WEBHOOK_URL:
         requests.post(DISCORD_WEBHOOK_URL, json={"content": "🚀 O bot está online e funcionando!"})
 
-# Comando para perguntar ao DeepSeek
 @bot.command(aliases=["p"])
 async def perguntar(ctx, *, pergunta: str):
     resposta = perguntar_ao_deepseek(pergunta)
@@ -96,6 +117,10 @@ async def perguntar(ctx, *, pergunta: str):
 
     await tocar_audio(ctx, audio_buffer)
 
-# Rodando o bot
 if __name__ == "__main__":
-    bot.run(DISCORD_TOKEN)
+    from threading import Thread
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), threaded=True)).start()
+    try:
+        bot.run(DISCORD_TOKEN)
+    except discord.errors.LoginFailure:
+        print("Erro: Token do Discord inválido. Verifique a configuração.")
