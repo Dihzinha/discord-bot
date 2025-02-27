@@ -20,4 +20,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # Comando para iniciar o bot
-CMD ["python", "main.py"]
+CMD ["python", "/app/main.py"]
