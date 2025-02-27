@@ -7,6 +7,7 @@ import asyncio
 import requests
 from flask import Flask
 import shutil
+import aiohttp
 
 # Inicializa um servidor Flask para Cloud Run
 app = Flask(__name__)
