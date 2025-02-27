@@ -69,3 +69,4 @@ if __name__ == "__main__":
         bot.run(DISCORD_TOKEN)
     except discord.errors.LoginFailure:
         print("Erro: Token do Discord inválido. Verifique a configuração.")
+        
