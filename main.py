@@ -7,6 +7,7 @@ import asyncio
 import requests
 from flask import Flask
 import shutil
+import time
 import tempfile
 
 # Inicializa um servidor Flask para Cloud Run
@@ -72,15 +73,15 @@ async def tocar_audio(ctx, audio_buffer):
         if voice_client.is_playing():
             voice_client.stop()
 
-        # Salvar o áudio gerado em um arquivo temporário
-        ffmpeg_path = shutil.which("ffmpeg")
-        if not ffmpeg_path:
-            await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
-            return
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
+        # Salvar o áudio gerado em um arquivo temporário no formato WAV
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
             tts = gTTS(text=audio_buffer, lang='pt-br', slow=False)
             tts.save(temp_file.name)
+
+            ffmpeg_path = shutil.which("ffmpeg")
+            if not ffmpeg_path:
+                await ctx.send("Erro: ffmpeg não encontrado. O áudio não pode ser reproduzido.")
+                return
 
             ffmpeg_options = "-filter:a atempo=1.50,asetrate=44100*0.69"
             source = discord.FFmpegPCMAudio(temp_file.name, executable=ffmpeg_path, options=ffmpeg_options)
@@ -106,7 +107,12 @@ async def perguntar(ctx, *, pergunta: str):
     resposta = perguntar_ao_deepseek(pergunta)
     await ctx.send(f"**Pergunta:** {pergunta}\n**Resposta:** {resposta}")
 
-    await tocar_audio(ctx, resposta)
+    tts = gTTS(text=resposta, lang='pt-br', slow=False)
+    audio_buffer = BytesIO()
+    tts.write_to_fp(audio_buffer)
+    audio_buffer.seek(0)
+
+    await tocar_audio(ctx, audio_buffer)
 
 if __name__ == "__main__":
     from threading import Thread
